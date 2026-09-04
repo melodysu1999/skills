@@ -1,0 +1,22 @@
+{
+  "name": "qa-testing",
+  "version": "0.1.0",
+  "description": "Orchestrate safe, resumable SIT verification from one Mantis issue.",
+  "author": {
+    "name": "melodysu1999",
+    "url": "https://github.com/melodysu1999"
+  },
+  "homepage": "https://github.com/melodysu1999/skills/tree/main/plugins/qa-testing",
+  "repository": "https://github.com/melodysu1999/skills",
+  "keywords": ["qa", "testing", "mantis", "sit"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "QA Testing",
+    "shortDescription": "從單一 Mantis 問題執行 SIT 驗測",
+    "longDescription": "讀取 Mantis 問題與現行驗收條件，協調既有工具安全執行可續跑的 SIT 驗測、保存證據，並留下非公開結果。",
+    "developerName": "melodysu1999",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": "使用 $qa-testing 驗測這張 Mantis 問題，保存證據並回覆非公開結果。"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "melodysu1999-skills",
+  "interface": {
+    "displayName": "Melodysu1999 Skills"
+  },
+  "plugins": [
+    {
+      "name": "qa-testing",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qa-testing"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
