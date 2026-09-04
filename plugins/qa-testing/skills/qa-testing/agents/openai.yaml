@@ -1,6 +1,6 @@
 interface:
   display_name: "Mantis 問題驗測"
-  short_description: "從單一 Mantis 問題執行 SIT 驗測並留下非公開結果"
-  default_prompt: "使用 $qa-testing 驗測這張 Mantis 問題，保存證據並回覆非公開結果。"
+  short_description: "從單一 Mantis 問題執行 SIT 驗測、私密交付及選用 Word 報告"
+  default_prompt: "使用 $qa-testing 驗測這張 Mantis 問題，保存證據、私密交付，並依設定產生 Word 報告。"
 policy:
   allow_implicit_invocation: true

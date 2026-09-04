@@ -9,6 +9,20 @@ import json
 from pathlib import Path
 
 
+def readable_test_data(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        labels = {"safe_quote": "測試資料", "record": "測試紀錄", "case": "測試案件"}
+        kind = value.get("type")
+        identifier = value.get("value") or value.get("id") or value.get("reference")
+        if identifier is not None:
+            return f"{labels.get(kind, value.get('label') or '測試資料')}：{identifier}"
+        pairs = [f"{key}：{item}" for key, item in value.items() if isinstance(item, (str, int, float, bool))]
+        return "、".join(pairs) if pairs else "已記錄安全測試資料"
+    return str(value)
+
+
 def lines_for(result: dict) -> list[str]:
     run = result["run"]
     issue = result["issue"]
@@ -16,20 +30,36 @@ def lines_for(result: dict) -> list[str]:
     execution = result["execution"]
     outcome = result["result"]
     evidence = result["evidence"]
+    actor = execution.get("actor", {})
+    actor_label = actor.get("account_label") or actor.get("role")
 
     lines = [
         "【QA SIT 驗測結果】",
         f"Mantis：#{issue['id']} {issue['summary']}",
         f"環境：{project['name']}／{project['environment']}",
+        f"帳號／角色：{actor_label or '未記錄'}",
+        f"驗收重點：{issue['acceptance_summary']}",
         f"結果：{outcome['verdict']}",
         f"摘要：{outcome['summary']}",
         "",
-        "本次執行：",
+        "主要測試資料：",
     ]
+    test_data_refs = execution.get("test_data_refs", [])
+    if test_data_refs:
+        lines.extend(f"- {readable_test_data(item)}" for item in test_data_refs)
+    else:
+        lines.append("- 本次沒有建立測試資料。")
+
+    lines.extend([
+        "",
+        "本次執行：",
+    ])
     steps = execution.get("steps", [])
     if steps:
         for step in steps:
-            lines.append(f"- {step['action']}：{step['actual']}（{step['status']}）")
+            lines.append(f"- {step['action']}（{step['status']}）")
+            lines.append(f"  預期：{step['expected']}")
+            lines.append(f"  實際：{step['actual']}")
     else:
         lines.append("- 尚未進入產品驗測。")
 
@@ -53,7 +83,7 @@ def lines_for(result: dict) -> list[str]:
         [
             "",
             f"最後完成步驟：{execution.get('last_completed_step') or '尚未開始'}",
-            f"下一步：{outcome['next_step']}",
+            f"建議／下一步：{outcome['next_step']}",
             f"執行識別：{run['id']}",
         ]
     )

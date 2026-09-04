@@ -10,6 +10,7 @@ from pathlib import Path
 
 from validate_result import (
     RESUME_MODES,
+    SUPPORTED_SCHEMA_VERSIONS,
     ValidationError,
     contained_file,
     require_fields,
@@ -23,31 +24,89 @@ from validate_result import (
 )
 
 
-PHASES = {"grounded", "bound", "continuity", "preflight", "planned", "executing", "classified", "delivering"}
-STATUSES = {"running", "retryable_error", "configuration_error", "delivery_pending", "completed"}
+PHASES = {"grounded", "bound", "continuity", "preflight", "planned", "executing", "classified", "reporting", "delivering"}
+STATUSES = {"running", "retryable_error", "configuration_error", "report_pending", "delivery_pending", "completed"}
 NOTE_STATUSES = {"not_prepared", "pending", "retryable_error", "posted", "duplicate", "skipped_immaterial"}
+CHECKPOINT_REPORT_STATUSES = {"not_requested", "pending", "ready", "retryable_error", "delivered"}
+CHECKPOINT_REPORT_DELIVERY_STATUSES = {"not_requested", "not_ready", "pending", "posted", "duplicate", "retryable_error"}
+
+
+def validate_checkpoint_report(report: dict, result_data: dict | None, result_finalized: bool) -> None:
+    require_fields(
+        report,
+        "report",
+        ("requested", "status", "path", "sha256", "delivery_status", "attachment_id", "stored_filename", "revision"),
+    )
+    requested = report.get("requested")
+    if not isinstance(requested, bool):
+        raise ValidationError("report.requested must be boolean")
+    if report.get("status") not in CHECKPOINT_REPORT_STATUSES:
+        raise ValidationError(f"invalid report.status: {report.get('status')}")
+    if report.get("delivery_status") not in CHECKPOINT_REPORT_DELIVERY_STATUSES:
+        raise ValidationError(f"invalid report.delivery_status: {report.get('delivery_status')}")
+    for name in ("path", "sha256", "attachment_id", "stored_filename"):
+        require_optional_text(report, "report", name)
+    revision = report.get("revision")
+    if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+        raise ValidationError("report.revision must be a non-negative integer")
+    if requested and revision < 1:
+        raise ValidationError("requested report revision must be positive")
+    if not requested and (revision != 0 or report.get("status") != "not_requested"):
+        raise ValidationError("unrequested checkpoint report must use revision zero and not_requested status")
+
+    if result_finalized:
+        if result_data is None or result_data.get("schema_version") != 2:
+            raise ValidationError("version 2 checkpoint report requires a version 2 result")
+        result_report = result_data["report"]
+        result_delivery = result_report["delivery"]
+        expected = {
+            "requested": result_report["requested"],
+            "status": result_report["status"],
+            "path": result_report["path"],
+            "sha256": result_report["sha256"],
+            "delivery_status": result_delivery["status"],
+            "attachment_id": result_delivery["attachment_id"],
+            "stored_filename": result_delivery["stored_filename"],
+            "revision": result_delivery["revision"],
+        }
+        if any(report.get(key) != value for key, value in expected.items()):
+            raise ValidationError("checkpoint and result report identity differ")
+    else:
+        if report.get("status") not in {"not_requested", "pending"}:
+            raise ValidationError("unfinished SIT checkpoint must not contain a generated report")
+        if report.get("path") is not None or report.get("sha256") is not None:
+            raise ValidationError("unfinished SIT checkpoint must not reference a report artifact")
+        if report.get("attachment_id") is not None or report.get("stored_filename") is not None:
+            raise ValidationError("unfinished SIT checkpoint must not contain report delivery identity")
+        expected_delivery = "not_ready" if requested else "not_requested"
+        if report.get("delivery_status") != expected_delivery:
+            raise ValidationError("unfinished SIT checkpoint has invalid report delivery state")
 
 
 def validate(data: dict, checkpoint_path: Path) -> None:
-    if data.get("schema_version") != 1:
-        raise ValidationError("schema_version must equal 1")
+    schema_version = data.get("schema_version")
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise ValidationError("schema_version must equal 1 or 2")
+    required_fields = [
+        "run_id",
+        "updated_at",
+        "phase",
+        "status",
+        "issue",
+        "project",
+        "continuation",
+        "test_data_refs",
+        "evidence_refs",
+        "result_path",
+        "prepared_note",
+        "security",
+    ]
+    if schema_version == 2:
+        required_fields.append("report")
     require_fields(
         data,
         "$",
-        (
-            "run_id",
-            "updated_at",
-            "phase",
-            "status",
-            "issue",
-            "project",
-            "continuation",
-            "test_data_refs",
-            "evidence_refs",
-            "result_path",
-            "prepared_note",
-            "security",
-        ),
+        tuple(required_fields),
     )
     run_id = require_text(data, "$", "run_id")
     require_timestamp(data, "$", "updated_at")
@@ -101,10 +160,14 @@ def validate(data: dict, checkpoint_path: Path) -> None:
         raise ValidationError(f"invalid prepared_note.status: {prepared.get('status')}")
 
     result_finalized = continuation["result_finalized"]
+    mode = continuation.get("mode")
+    if mode in {"report-only", "delivery-only"} and not result_finalized:
+        raise ValidationError(f"{mode} requires continuation.result_finalized=true")
     result_data = None
+    result_report = None
     if result_finalized:
-        if data.get("phase") not in {"classified", "delivering"}:
-            raise ValidationError("finalized result requires classified or delivering phase")
+        if data.get("phase") not in {"classified", "reporting", "delivering"}:
+            raise ValidationError("finalized result requires classified, reporting, or delivering phase")
         result_relative = require_text(data, "$", "result_path")
         result_file = contained_file(checkpoint_path.parent, result_relative)
         result_data = json.loads(result_file.read_text(encoding="utf-8"))
@@ -125,21 +188,48 @@ def validate(data: dict, checkpoint_path: Path) -> None:
         result_evidence = {item["path"] for item in result_data["evidence"]}
         if not set(evidence_refs).issubset(result_evidence):
             raise ValidationError("checkpoint evidence is not present in the result")
+        result_report = result_data.get("report")
     else:
         if result_path_value is not None:
             raise ValidationError("unfinished checkpoint must not reference a finalized result")
         if note_path_value is not None or note_hash is not None or prepared.get("status") != "not_prepared":
             raise ValidationError("unfinished checkpoint must not contain a prepared note")
 
-    if continuation.get("mode") == "delivery-only":
-        if not result_finalized:
-            raise ValidationError("delivery-only requires continuation.result_finalized=true")
+    if schema_version == 2:
+        report = require_object(data, "report")
+        validate_checkpoint_report(report, result_data, result_finalized)
+    else:
+        report = None
+
+    if mode in {"report-only", "delivery-only"}:
         if continuation.get("prior_run_id") != run_id:
-            raise ValidationError("delivery-only must retain the original run ID")
-        if prepared.get("status") not in {"pending", "retryable_error"}:
-            raise ValidationError("delivery-only requires unresolved prepared-note delivery")
-    if data.get("status") == "delivery_pending" and prepared.get("status") not in {"pending", "retryable_error"}:
-        raise ValidationError("delivery_pending requires a pending or retryable prepared note")
+            raise ValidationError(f"{mode} must retain the original run ID")
+        if mode == "report-only" and (schema_version != 2 or result_report is None):
+            raise ValidationError("report-only requires a version 2 report state")
+
+    unresolved_note = prepared.get("status") in {"pending", "retryable_error"}
+    unresolved_report_generation = bool(
+        result_report
+        and result_report["requested"]
+        and result_report["status"] in {"pending", "retryable_error"}
+    )
+    unresolved_report_delivery = bool(
+        result_report
+        and result_report["status"] == "ready"
+        and result_report["delivery"]["status"] in {"pending", "retryable_error"}
+    )
+
+    if mode == "report-only":
+        if not unresolved_report_generation:
+            raise ValidationError("report-only requires unresolved report generation or QA")
+        if data.get("phase") != "reporting":
+            raise ValidationError("report-only requires reporting phase")
+    if mode == "delivery-only" and not (unresolved_note or unresolved_report_delivery):
+        raise ValidationError("delivery-only requires unresolved note or report delivery")
+    if data.get("status") == "report_pending" and not unresolved_report_generation:
+        raise ValidationError("report_pending requires unresolved report generation or QA")
+    if data.get("status") == "delivery_pending" and not (unresolved_note or unresolved_report_delivery):
+        raise ValidationError("delivery_pending requires unresolved note or report delivery")
 
     security = require_object(data, "security")
     if security.get("secrets_redacted") is not True:

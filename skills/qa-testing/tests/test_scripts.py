@@ -159,6 +159,144 @@ class QaTestingScriptsTest(unittest.TestCase):
             "security": {"secrets_redacted": True},
         }
 
+    def report_quality(self, passed: bool) -> dict:
+        return {
+            "page_count": 1 if passed else None,
+            "page_size": "Letter",
+            "orientation": "portrait",
+            "max_pages": 1,
+            "render_reviewed": passed,
+            "title_style_checked": passed,
+            "focus_annotations_checked": passed,
+            "accessibility_audit_passed": passed,
+        }
+
+    def unrequested_report(self) -> dict:
+        return {
+            "requested": False,
+            "status": "not_requested",
+            "format": None,
+            "path": None,
+            "sha256": None,
+            "assets": [],
+            "quality": self.report_quality(False),
+            "delivery": {
+                "status": "not_requested",
+                "note_id": None,
+                "attachment_id": None,
+                "requested_filename": None,
+                "stored_filename": None,
+                "revision": 0,
+                "supersedes_attachment_id": None,
+                "error": None,
+            },
+            "error": None,
+        }
+
+    def retryable_report(self) -> dict:
+        report = self.unrequested_report()
+        report.update({"requested": True, "status": "retryable_error", "format": "docx", "error": "render failed"})
+        report["delivery"].update(
+            {
+                "status": "not_ready",
+                "requested_filename": "Mantis 037259 測試報告.docx",
+                "revision": 1,
+            }
+        )
+        return report
+
+    def ready_report(self, *, delivered: bool = False, revision: int = 1) -> dict:
+        report_file = self.run_dir / "Mantis 037259 測試報告.docx"
+        report_file.write_bytes(b"fixture docx bytes")
+        report_asset = self.run_dir / "report-assets" / "underwriting-focus.png"
+        report_asset.parent.mkdir(parents=True, exist_ok=True)
+        report_asset.write_bytes(b"annotated screenshot fixture")
+        delivery_status = "posted" if delivered else "pending"
+        stored_filename = "Mantis 037259 測試報告-2.docx" if revision > 1 else "Mantis 037259 測試報告.docx"
+        return {
+            "requested": True,
+            "status": "delivered" if delivered else "ready",
+            "format": "docx",
+            "path": report_file.name,
+            "sha256": hashlib.sha256(report_file.read_bytes()).hexdigest(),
+            "assets": [
+                {
+                    "id": "report-asset-01",
+                    "source_evidence_id": "ev-01",
+                    "type": "annotated_screenshot",
+                    "path": "report-assets/underwriting-focus.png",
+                    "sha256": hashlib.sha256(report_asset.read_bytes()).hexdigest(),
+                    "description": "以紅框標示核保紀錄區",
+                    "annotation": "red_frame",
+                }
+            ],
+            "quality": self.report_quality(True),
+            "delivery": {
+                "status": delivery_status,
+                "note_id": "98123" if delivered else None,
+                "attachment_id": "45678" if delivered else None,
+                "requested_filename": "Mantis 037259 測試報告.docx",
+                "stored_filename": stored_filename if delivered else None,
+                "revision": revision,
+                "supersedes_attachment_id": "44567" if delivered and revision > 1 else None,
+                "error": None,
+            },
+            "error": None,
+        }
+
+    def write_version_two_result(self, report: dict) -> dict:
+        value = copy.deepcopy(self.result)
+        value["schema_version"] = 2
+        value["execution"]["actor"] = {"role": "核保人員", "account_label": "SIT 核保測試帳號"}
+        value["report"] = report
+        write_json(self.result_path, value)
+        rendered = self.run_script("render_mantis_note.py", self.result_path, "--output", self.run_dir / "mantis-note.txt")
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        self.note_manifest = json.loads(rendered.stdout)
+        value["mantis_note"]["content_sha256"] = self.note_manifest["sha256"]
+        write_json(self.result_path, value)
+        self.result = value
+        return value
+
+    def version_two_checkpoint(self, value: dict, *, mode: str, phase: str, status: str) -> dict:
+        report = value["report"]
+        delivery = report["delivery"]
+        return {
+            "schema_version": 2,
+            "run_id": self.run_id,
+            "updated_at": "2026-09-04T14:41:00+08:00",
+            "phase": phase,
+            "status": status,
+            "issue": {"id": "37259", "project_id": "123", "updated_at": "2026-09-04T13:00:00+08:00"},
+            "project": {"name": "範例專案", "environment": "SIT"},
+            "continuation": {
+                "mode": mode,
+                "prior_run_id": self.run_id,
+                "result_finalized": True,
+                "last_completed_step": "step-01",
+                "next_safe_step": "只續跑報告下游工作，不重新執行 SIT。",
+            },
+            "test_data_refs": value["execution"]["test_data_refs"],
+            "evidence_refs": ["evidence/step-01.txt"],
+            "result_path": "test-result.json",
+            "prepared_note": {
+                "path": value["mantis_note"]["prepared_note_path"],
+                "sha256": value["mantis_note"]["content_sha256"],
+                "status": value["mantis_note"]["status"],
+            },
+            "report": {
+                "requested": report["requested"],
+                "status": report["status"],
+                "path": report["path"],
+                "sha256": report["sha256"],
+                "delivery_status": delivery["status"],
+                "attachment_id": delivery["attachment_id"],
+                "stored_filename": delivery["stored_filename"],
+                "revision": delivery["revision"],
+            },
+            "security": {"secrets_redacted": True},
+        }
+
     def assert_invalid_result(self, value: dict, message: str) -> None:
         self.write_result(value)
         completed = self.run_script("validate_result.py", self.result_path)
@@ -287,6 +425,126 @@ class QaTestingScriptsTest(unittest.TestCase):
         completed = self.run_script("validate_checkpoint.py", checkpoint_path)
         self.assertEqual(completed.returncode, 1)
         self.assertIn("prepared note identity differ", completed.stderr)
+
+    def test_version_two_result_accepts_unrequested_report_and_detailed_note(self) -> None:
+        self.write_version_two_result(self.unrequested_report())
+        completed = self.run_script("validate_result.py", self.result_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        note = (self.run_dir / "mantis-note.txt").read_text(encoding="utf-8")
+        self.assertIn("帳號／角色：SIT 核保測試帳號", note)
+        self.assertIn("驗收重點：產生文件並確認內容顯示正確。", note)
+        self.assertIn("主要測試資料：", note)
+        self.assertIn("預期：文件可開啟且內容正確", note)
+        self.assertIn("實際：文件可開啟且內容正確", note)
+
+    def test_validate_result_accepts_ready_report_with_red_frame_asset(self) -> None:
+        self.write_version_two_result(self.ready_report())
+        evidence_hash_before = hashlib.sha256((self.run_dir / "evidence" / "step-01.txt").read_bytes()).hexdigest()
+        completed = self.run_script("validate_result.py", self.result_path)
+        evidence_hash_after = hashlib.sha256((self.run_dir / "evidence" / "step-01.txt").read_bytes()).hexdigest()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(evidence_hash_before, evidence_hash_after)
+
+    def test_validate_result_rejects_ready_report_before_all_qa_gates_pass(self) -> None:
+        report = self.ready_report()
+        report["quality"]["focus_annotations_checked"] = False
+        value = self.write_version_two_result(report)
+        self.assert_invalid_result(value, "ready report requires every pre-upload QA gate")
+
+    def test_validate_result_rejects_annotated_asset_without_visible_focus_marker(self) -> None:
+        report = self.ready_report()
+        report["assets"][0]["annotation"] = "none"
+        value = self.write_version_two_result(report)
+        self.assert_invalid_result(value, "annotated report screenshot requires a visible focus marker")
+
+    def test_validate_result_rejects_report_asset_that_reuses_evidence_path(self) -> None:
+        report = self.ready_report()
+        report["assets"][0]["path"] = "evidence/step-01.txt"
+        report["assets"][0]["sha256"] = self.result["evidence"][0]["sha256"]
+        value = self.write_version_two_result(report)
+        self.assert_invalid_result(value, "report asset must stay under report-assets")
+
+    def test_report_failure_preserves_completed_pass_verdict(self) -> None:
+        value = self.write_version_two_result(self.retryable_report())
+        completed = self.run_script("validate_result.py", self.result_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(value["run"]["status"], "completed")
+        self.assertEqual(value["result"]["verdict"], "Pass")
+
+    def test_report_upload_failure_preserves_verdict_for_delivery_only_retry(self) -> None:
+        report = self.ready_report()
+        report["delivery"]["status"] = "retryable_error"
+        report["delivery"]["error"] = "Mantis upload timeout"
+        value = self.write_version_two_result(report)
+        completed = self.run_script("validate_result.py", self.result_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(value["run"]["status"], "completed")
+        self.assertEqual(value["result"]["verdict"], "Pass")
+
+        checkpoint = self.version_two_checkpoint(value, mode="delivery-only", phase="delivering", status="delivery_pending")
+        checkpoint_path = self.run_dir / "checkpoint.json"
+        write_json(checkpoint_path, checkpoint)
+        resumed = self.run_script("validate_checkpoint.py", checkpoint_path)
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+
+    def test_delivered_revision_records_attachment_identity_and_server_filename(self) -> None:
+        value = self.write_version_two_result(self.ready_report(delivered=True, revision=2))
+        completed = self.run_script("validate_result.py", self.result_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        delivery = value["report"]["delivery"]
+        self.assertEqual(delivery["attachment_id"], "45678")
+        self.assertEqual(delivery["stored_filename"], "Mantis 037259 測試報告-2.docx")
+        self.assertEqual(delivery["supersedes_attachment_id"], "44567")
+
+    def test_delivered_report_rejects_missing_attachment_id(self) -> None:
+        report = self.ready_report(delivered=True)
+        report["delivery"]["attachment_id"] = None
+        value = self.write_version_two_result(report)
+        self.assert_invalid_result(value, "report.delivery.attachment_id must be a non-empty string")
+
+    def test_report_only_checkpoint_requires_finalized_result_and_skips_sit(self) -> None:
+        value = self.write_version_two_result(self.retryable_report())
+        checkpoint = self.version_two_checkpoint(value, mode="report-only", phase="reporting", status="report_pending")
+        checkpoint_path = self.run_dir / "checkpoint.json"
+        write_json(checkpoint_path, checkpoint)
+        completed = self.run_script("validate_checkpoint.py", checkpoint_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertTrue(checkpoint["continuation"]["result_finalized"])
+        self.assertIn("不重新執行 SIT", checkpoint["continuation"]["next_safe_step"])
+
+    def test_report_only_checkpoint_rejects_unfinalized_result(self) -> None:
+        value = self.write_version_two_result(self.retryable_report())
+        checkpoint = self.version_two_checkpoint(value, mode="report-only", phase="reporting", status="report_pending")
+        checkpoint["continuation"]["result_finalized"] = False
+        checkpoint["result_path"] = None
+        checkpoint["prepared_note"] = {"path": None, "sha256": None, "status": "not_prepared"}
+        checkpoint_path = self.run_dir / "checkpoint.json"
+        write_json(checkpoint_path, checkpoint)
+        completed = self.run_script("validate_checkpoint.py", checkpoint_path)
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("report-only requires continuation.result_finalized=true", completed.stderr)
+
+    def test_delivery_only_checkpoint_accepts_ready_report_when_note_is_already_posted(self) -> None:
+        report = self.ready_report()
+        value = self.write_version_two_result(report)
+        value["mantis_note"]["status"] = "posted"
+        value["mantis_note"]["note_id"] = "98122"
+        write_json(self.result_path, value)
+        checkpoint = self.version_two_checkpoint(value, mode="delivery-only", phase="delivering", status="delivery_pending")
+        checkpoint_path = self.run_dir / "checkpoint.json"
+        write_json(checkpoint_path, checkpoint)
+        completed = self.run_script("validate_checkpoint.py", checkpoint_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_checkpoint_rejects_report_attachment_identity_mismatch(self) -> None:
+        value = self.write_version_two_result(self.ready_report(delivered=True))
+        checkpoint = self.version_two_checkpoint(value, mode="fresh", phase="delivering", status="completed")
+        checkpoint["report"]["stored_filename"] = "guessed-local-name.docx"
+        checkpoint_path = self.run_dir / "checkpoint.json"
+        write_json(checkpoint_path, checkpoint)
+        completed = self.run_script("validate_checkpoint.py", checkpoint_path)
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("checkpoint and result report identity differ", completed.stderr)
 
 
 if __name__ == "__main__":

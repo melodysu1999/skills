@@ -1,7 +1,7 @@
 {
   "name": "qa-testing",
-  "version": "0.1.0",
-  "description": "Orchestrate safe, resumable SIT verification from one Mantis issue.",
+  "version": "0.2.0",
+  "description": "Orchestrate safe, resumable SIT verification and private DOCX report delivery from one Mantis issue.",
   "author": {
     "name": "melodysu1999",
     "url": "https://github.com/melodysu1999"
@@ -13,10 +13,10 @@
   "interface": {
     "displayName": "QA Testing",
     "shortDescription": "從單一 Mantis 問題執行 SIT 驗測",
-    "longDescription": "讀取 Mantis 問題與現行驗收條件，協調既有工具安全執行可續跑的 SIT 驗測、保存證據，並留下非公開結果。",
+    "longDescription": "讀取 Mantis 問題與現行驗收條件，協調既有工具安全執行可續跑的 SIT 驗測、保存證據，並依設定產生及私密交付一頁 Word 報告。",
     "developerName": "melodysu1999",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
-    "defaultPrompt": "使用 $qa-testing 驗測這張 Mantis 問題，保存證據並回覆非公開結果。"
+    "defaultPrompt": "使用 $qa-testing 驗測這張 Mantis 問題，保存證據、私密交付，並依設定產生 Word 報告。"
   }
 }
