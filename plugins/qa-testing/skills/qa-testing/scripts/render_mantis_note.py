@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Render a readable private-note body from a validated qa-testing result."""
+"""Validate the classified core and render its readable private-note body."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
+
+from validate_result import ValidationError, validate
 
 
 def readable_test_data(value: object) -> str:
@@ -90,22 +94,46 @@ def lines_for(result: dict) -> list[str]:
     return lines
 
 
+def write_atomic_text(path: Path, value: str) -> None:
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(value)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, path)
+    except Exception:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("result", type=Path, help="Validated test-result.json")
     parser.add_argument("--output", type=Path, help="Write UTF-8 note text and print only its path and hash")
     args = parser.parse_args()
 
-    data = json.loads(args.result.read_text(encoding="utf-8"))
-    if data.get("mantis_note", {}).get("private") is not True:
-        parser.error("mantis_note.private must be true")
+    try:
+        result_path = args.result.resolve(strict=True)
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValidationError("root must be an object")
+        validate(data, result_path, require_prepared_note=False, require_valid_report=False)
+    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        parser.error(str(exc))
+
     note = "\n".join(lines_for(data)).rstrip() + "\n"
     digest = hashlib.sha256(note.encode("utf-8")).hexdigest()
 
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(note, encoding="utf-8", newline="\n")
-        print(json.dumps({"path": str(args.output), "sha256": digest}, ensure_ascii=False))
+        output = args.output.resolve()
+        if output.parent != result_path.parent:
+            parser.error("output must stay inside the result run directory")
+        write_atomic_text(output, note)
+        print(json.dumps({"path": str(output), "sha256": digest}, ensure_ascii=False))
     else:
         print(note, end="")
     return 0

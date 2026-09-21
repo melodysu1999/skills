@@ -346,6 +346,30 @@ class QaTestingScriptsTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertIn("mantis_note.private must be true", completed.stderr)
 
+    def test_render_mantis_note_rejects_invalid_core_result(self) -> None:
+        invalid = copy.deepcopy(self.result)
+        invalid["run"]["status"] = "retryable_error"
+        invalid["result"]["verdict"] = "Fail"
+        self.write_result(invalid)
+        completed = self.run_script("render_mantis_note.py", self.result_path)
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("invalid terminal combination", completed.stderr)
+
+    def test_render_mantis_note_rejects_output_outside_run_directory(self) -> None:
+        outside = self.issue_dir / "mantis-note.txt"
+        completed = self.run_script("render_mantis_note.py", self.result_path, "--output", outside)
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("output must stay inside the result run directory", completed.stderr)
+        self.assertFalse(outside.exists())
+
+    def test_render_mantis_note_atomically_replaces_existing_output(self) -> None:
+        note_path = self.run_dir / "mantis-note.txt"
+        note_path.write_text("stale note\n", encoding="utf-8")
+        completed = self.run_script("render_mantis_note.py", self.result_path, "--output", note_path)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("【QA SIT 驗測結果】", note_path.read_text(encoding="utf-8"))
+        self.assertEqual(list(self.run_dir.glob(".mantis-note.txt-*.tmp")), [])
+
     def test_update_latest_writes_result_pointer_and_hash(self) -> None:
         completed = self.run_script("update_latest.py", self.result_path)
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -361,6 +385,18 @@ class QaTestingScriptsTest(unittest.TestCase):
         completed = self.run_script("update_latest.py", self.result_path)
         self.assertEqual(completed.returncode, 2)
         self.assertIn("run.id must match", completed.stderr)
+
+    def test_update_latest_rejects_result_that_failed_validation(self) -> None:
+        latest_path = self.issue_dir / "latest.json"
+        latest_path.write_text('{"existing": true}\n', encoding="utf-8")
+        original_pointer = latest_path.read_bytes()
+        invalid = copy.deepcopy(self.result)
+        invalid["evidence"][0]["sha256"] = "0" * 64
+        self.write_result(invalid)
+        completed = self.run_script("update_latest.py", self.result_path)
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("evidence hash mismatch", completed.stderr)
+        self.assertEqual(latest_path.read_bytes(), original_pointer)
 
     def test_validate_checkpoint_accepts_unfinished_run(self) -> None:
         running_id = "qa-37259-20260904T150000+0800"

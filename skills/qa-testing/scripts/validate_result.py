@@ -296,7 +296,13 @@ def validate_report(
             require_text(delivery, "report.delivery", "supersedes_attachment_id")
 
 
-def validate(data: dict[str, Any], result_path: Path) -> None:
+def validate(
+    data: dict[str, Any],
+    result_path: Path,
+    *,
+    require_prepared_note: bool = True,
+    require_valid_report: bool = True,
+) -> None:
     schema_version = data.get("schema_version")
     if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValidationError("schema_version must equal 1 or 2")
@@ -375,7 +381,7 @@ def validate(data: dict[str, Any], result_path: Path) -> None:
     for name in ("note_id", "prepared_note_path", "content_sha256", "error"):
         require_optional_text(note, "mantis_note", name)
     prepared_statuses = {"pending", "posted", "duplicate", "retryable_error"}
-    if note.get("status") in prepared_statuses:
+    if note.get("status") in prepared_statuses and require_prepared_note:
         note_path_value = require_text(note, "mantis_note", "prepared_note_path")
         note_hash = require_text(note, "mantis_note", "content_sha256")
         if not SHA256.fullmatch(note_hash):
@@ -439,7 +445,7 @@ def validate(data: dict[str, Any], result_path: Path) -> None:
     if unknown_steps:
         raise ValidationError(f"evidence references missing execution steps: {', '.join(sorted(unknown_steps))}")
 
-    if schema_version == 2:
+    if schema_version == 2 and require_valid_report:
         validate_report(objects["report"], result_path, evidence_ids, evidence_paths)
 
     scan_secrets(data)

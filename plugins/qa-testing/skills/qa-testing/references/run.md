@@ -62,7 +62,7 @@ Assign run status and verdict using [contracts.md](contracts.md):
 - automation, browser-control, download-monitor, rendering, or transient connection failure without product evidence -> `retryable_error + Not Run`;
 - invalid project, authentication, or required capability configuration -> `configuration_error + Not Run`.
 
-Write the version 2 result and evidence beneath `docs/testing/<issue-id>/<run-id>/`. Record whether the report is requested from `qa.yaml` or the current user instruction. Render the detailed `mantis-note.txt`, record its relative path and content hash in the result, then run `scripts/validate_result.py`. Preserve these exact note bytes for delivery and retries.
+Write the version 2 result and evidence beneath `docs/testing/<issue-id>/<run-id>/`. Record whether the report is requested from `qa.yaml` or the current user instruction. Use `scripts/render_mantis_note.py` to validate the classified core and atomically write the detailed `mantis-note.txt` inside the run directory. Record its relative path and content hash in the result, then run `scripts/validate_result.py`. Preserve these exact note bytes for delivery and retries.
 
 Completion: summary, evidence, blockers, release conditions, actor label, last safe checkpoint, next step, and report intent support the classification; the preliminary result validates; and the prepared note hash is recorded even when downstream work has not succeeded.
 
@@ -88,6 +88,6 @@ If the POST response is uncertain or times out, immediately read the latest 20 n
 
 When the detailed note already exists but its report attachment still needs delivery, add a short private note with the report file rather than repeating the detailed note. For a user-requested revision after a prior successful upload, the new private note must state `請以本回話附件為準` and the result must record the superseded attachment ID.
 
-Record every observed note and attachment delivery outcome, validate the result again, then run `scripts/update_latest.py` last so its hash covers the finalized bytes. Use the independent `mantis_note` and `report.delivery` states; downstream failure does not change `run.status` or `result.verdict`.
+Record every observed note and attachment delivery outcome, validate the result again, then run `scripts/update_latest.py` last. The update script repeats full result validation before writing `latest.json`, whose hash covers the finalized bytes. Use the independent `mantis_note` and `report.delivery` states; downstream failure does not change `run.status` or `result.verdict`.
 
 Completion: `test-result.json` validates, `latest.json` resolves to it with a matching hash, and every requested private note or report attachment is confirmed, deduplicated, intentionally skipped, or checkpointed for report-only or delivery-only retry. No Mantis status, assignee, or other issue field changes.

@@ -42,7 +42,9 @@ Run `python -m unittest discover -s tests -v` from the skill directory before be
 23. A report QA, generation, or upload failure creates a `report-only` or `delivery-only` checkpoint against the original run. Resumption neither reruns SIT nor creates test data, and the existing verdict remains unchanged.
 24. The preferred first delivery is one detailed private note with the QA-passed DOCX attached. Success records the Mantis note ID, attachment ID, requested filename, server-stored filename, and report revision.
 25. A post-upload revision creates a new QA-passed attachment with a short private note stating `請以本回話附件為準`; it records the superseded attachment ID and never overwrites or deletes the prior attachment.
+26. Note rendering rejects an invalid classified core and refuses to write outside the run directory; a successful file write is atomic.
+27. `update_latest.py` performs full result validation itself and leaves the prior pointer untouched when validation fails.
 
 ## QA usability
 
-26. A non-engineering QA user can start with a natural-language request, complete setup one question at a time, run verification, and understand the final response without editing YAML or reading source code.
+28. A non-engineering QA user can start with a natural-language request, complete setup one question at a time, run verification, and understand the final response without editing YAML or reading source code.

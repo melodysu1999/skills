@@ -1,6 +1,6 @@
 {
   "name": "qa-testing",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Orchestrate safe, resumable SIT verification and private DOCX report delivery from one Mantis issue.",
   "author": {
     "name": "melodysu1999",

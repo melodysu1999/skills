@@ -10,6 +10,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from validate_result import ValidationError, validate
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -32,7 +34,14 @@ def main() -> int:
     if run_dir == issue_dir:
         parser.error("result must be inside an issue/run directory")
 
-    data = json.loads(result.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(result.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValidationError("root must be an object")
+        validate(data, result)
+    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+        parser.error(f"invalid result: {exc}")
+
     run_id = data.get("run", {}).get("id")
     issue_id = data.get("issue", {}).get("id")
     if run_id != run_dir.name:
