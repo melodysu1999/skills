@@ -19,9 +19,26 @@ Use a black Word `Title` style with no underline, border, or decorative line. In
 - prominent `Pass`, `Fail`, or `Pending` result;
 - concise actual result;
 - before/after or expected/actual images with captions;
-- environment, primary safe test-data identifier, recommendation, and date.
+- environment, primary safe test-data identifier, recommendation, and date;
+- a visible footer page number on the rendered page.
 
-When comparing two stages, use a left/right layout if it stays readable on one page. Every screenshot with a specific verification target must visibly mark that target. For the observed underwriting pattern, frame the three first-stage passed records on the left and the completed underwriting record area on the right. Treat that example as a focus rule, not as a universal record count or domain layout.
+## Evidence image contract
+
+Choose report images from the acceptance claim outward:
+
+- Map each reader-facing claim to a source evidence item that visibly contains the tested label and value. A caption may explain the value but cannot replace visible UI evidence.
+- When validating premiums, the report must show the UI's per-person premium or per-person subtotal used by the test. A rate-only screen is supporting evidence, not a substitute for the premium screen.
+- Default to one evidence image per row. Use a side-by-side comparison only when the comparison itself is essential and both images, target values, and captions remain readable in the final DOCX render.
+- Preserve aspect ratio and keep the target label, value, and enough surrounding UI to identify the screen. Crop away unrelated navigation or blank space before shrinking text.
+
+Every screenshot with a specific verification target must visibly mark that target. Apply focus geometry after cropping, using coordinates relative to the derived image:
+
+- Frame only the target row or value area; exclude neighboring rows, sticky action bars, and unrelated controls.
+- Keep the complete frame inside the derived image with a safety margin of at least 12 pixels or 1% of the shorter image dimension, whichever is larger.
+- Use a 3–5 pixel stroke at the derived image resolution so the frame stays visible without covering labels or values.
+- Inspect each annotated asset at native size before insertion, then inspect the final rendered DOCX at 100%. A frame that touches an image edge, shifts onto another row, clips, or overlaps controls fails the focus gate.
+
+For the observed underwriting pattern, frame the three first-stage passed records and the completed underwriting record area. Treat that example as a focus rule, not as a universal record count or domain layout.
 
 Keep detailed environment, safe account label, acceptance focus, test data, step results, verdict, and recommendation in the private Mantis note. Do not duplicate the full procedure in Word.
 
@@ -31,10 +48,12 @@ Use the document skill's current create/edit, render verification, and accessibi
 
 1. Render the DOCX to page PNGs without requesting a delivered PDF.
 2. Inspect every rendered page at 100% and confirm one-page Letter portrait output, readable type, clean tables, captions, and no clipping or overlap.
-3. Confirm the title is black Word `Title` style and no blue or other line remains below it.
-4. Confirm every required validation focus is visibly marked in the report image, including the red-frame comparison when applicable.
-5. Run the accessibility audit. Give both report images meaningful alt text and mark actual table header rows; rerender after any fix and inspect again.
-6. Confirm the DOCX verdict and explanatory text match the validated JSON, then hash the final DOCX and derived assets.
+3. Confirm the footer shows the correct page number on the final render.
+4. Confirm the title is black Word `Title` style and no blue or other line remains below it.
+5. Trace each user-facing result claim to visible UI evidence. Confirm premium claims use a premium or per-person subtotal screen rather than only a rate screen.
+6. Confirm evidence images follow the final layout rule and every focus marker passes the native-size and final-render geometry checks above.
+7. Run the accessibility audit. Give every report image meaningful alt text and mark actual table header rows; rerender after any fix and inspect again.
+8. Confirm the DOCX verdict and explanatory text match the validated JSON, then hash the final DOCX and derived assets.
 
 Do not upload a draft. A failed gate records `report.status=retryable_error`, preserves the canonical verdict and evidence, and creates a `report-only` checkpoint.
 

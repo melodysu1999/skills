@@ -201,7 +201,7 @@ When `requested` is `false`, status is `not_requested`, artifact fields are null
 
 Each report asset contains `id`, `source_evidence_id`, `type`, `path`, `sha256`, `description`, and `annotation`. Paths stay beneath `report-assets/`, never reuse an `evidence/` path, and hashes cover the derived bytes. An `annotated_screenshot` uses `red_frame` or `equivalent_focus_marker`; the original evidence remains unchanged.
 
-The `quality` object records `page_count`, `page_size`, `orientation`, `max_pages`, `render_reviewed`, `title_style_checked`, `focus_annotations_checked`, and `accessibility_audit_passed`. A report may become `ready` only when page count is one, layout is Letter portrait, and every boolean gate is true on the final bytes.
+The `quality` object records `page_count`, `page_size`, `orientation`, `max_pages`, `render_reviewed`, `title_style_checked`, `focus_annotations_checked`, and `accessibility_audit_passed`. A report may become `ready` only when page count is one, layout is Letter portrait, and every boolean gate is true on the final bytes. `render_reviewed` also means the rendered footer shows the correct page number and every inserted image is readable in its final layout. `focus_annotations_checked` means each marker was inspected both on the derived asset and on the final page render, stays fully inside the image with the report contract's safety margin, and isolates the claimed label or value without covering neighboring rows or controls.
 
 The nested delivery object contains:
 

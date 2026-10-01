@@ -68,13 +68,13 @@ Completion: summary, evidence, blockers, release conditions, actor label, last s
 
 ## 8. Build and verify the optional DOCX
 
-Skip this stage when reporting is neither configured nor requested. Otherwise read [report.md](report.md), then delegate creation or revision to `documents:documents`. Supply only the validated result, hashed evidence, report contract, and user-approved revision request. Do not ask the document workflow to decide the verdict.
+Skip this stage when reporting is neither configured nor requested. Otherwise read [report.md](report.md), then delegate creation or revision to `documents:documents`. Supply only the validated result, hashed evidence, report contract, user-approved revision request, and a claim-to-evidence map naming the source screenshot that visibly proves each reader-facing result. Do not ask the document workflow to decide the verdict or infer a premium from a rate-only screenshot.
 
 Keep the first report delivery at revision 1. Create focus-marked image copies beneath `report-assets/`; never modify `evidence/`. After the document skill finishes its final render, page inspection, title-line check, focus-marker check, and accessibility audit, hash the final DOCX and every derived asset and record their paths and QA gates in `test-result.json`. Validate the result again.
 
 If authoring or any gate fails, record `report.status=retryable_error`, write a `report-only` checkpoint with the precise failed gate and next safe step, and stop without Mantis delivery. A user-requested post-upload revision increments the report revision and records the attachment ID it supersedes only after the new revision passes all gates.
 
-Completion: reporting is `not_requested`, or the final DOCX is `ready`, hashed, derived from the canonical verdict, and has passed every pre-upload gate.
+Completion: reporting is `not_requested`, or the final DOCX is `ready`, hashed, derived from the canonical verdict, and has passed every pre-upload gate, including visible page numbering, claim-to-evidence coverage, final-layout readability, and focus-marker geometry.
 
 ## 9. Deliver privately
 

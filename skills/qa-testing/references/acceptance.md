@@ -36,15 +36,17 @@ Run `python -m unittest discover -s tests -v` from the skill directory before be
 17. A material result produces one human-readable private Mantis note derived from the JSON. A matching run marker or content hash prevents duplication.
 18. A private-note failure preserves the finalized result and resumes at delivery only; it never repeats SIT. This also holds for a material `Not Run` result.
 19. No public note, Mantis field update, status transition, reassignment, attachment deletion, or unrelated attachment upload occurs; the only allowed attachment mutation is the requested QA-passed report on a private note.
-20. When reporting is enabled or explicitly requested, `documents:documents` produces only a one-page Letter portrait DOCX from the validated result and evidence; Word contains the user-facing summary while the private note retains detailed test context.
-21. Every screenshot with a specific validation target uses a derived image under `report-assets/` with a red frame or equally clear focus marker. Original evidence bytes and hashes remain unchanged.
-22. Before first upload, the final DOCX is rendered and every page visually inspected; black Title style, absence of a title line, focus annotations, meaningful image alt text, actual table header rows, and a passing accessibility audit are verified after the last edit.
-23. A report QA, generation, or upload failure creates a `report-only` or `delivery-only` checkpoint against the original run. Resumption neither reruns SIT nor creates test data, and the existing verdict remains unchanged.
-24. The preferred first delivery is one detailed private note with the QA-passed DOCX attached. Success records the Mantis note ID, attachment ID, requested filename, server-stored filename, and report revision.
-25. A post-upload revision creates a new QA-passed attachment with a short private note stating `請以本回話附件為準`; it records the superseded attachment ID and never overwrites or deletes the prior attachment.
-26. Note rendering rejects an invalid classified core and refuses to write outside the run directory; a successful file write is atomic.
-27. `update_latest.py` performs full result validation itself and leaves the prior pointer untouched when validation fails.
+20. When reporting is enabled or explicitly requested, `documents:documents` produces only a one-page Letter portrait DOCX from the validated result and evidence; Word contains the user-facing summary while the private note retains detailed test context. The rendered footer shows the correct page number.
+21. Every reader-facing claim maps to a screenshot that visibly contains the tested label and value. A premium claim includes the UI's per-person premium or subtotal; a rate-only screenshot is insufficient.
+22. Multiple evidence images default to one image per row. A side-by-side comparison is accepted only when both target values and captions remain readable in the final DOCX render.
+23. Every screenshot with a specific validation target uses a derived image under `report-assets/` with a red frame or equally clear focus marker. The marker stays inside the image with the required safety margin, isolates the intended row or value, and excludes neighboring rows, image edges, and sticky controls. Original evidence bytes and hashes remain unchanged.
+24. Before first upload, each annotated asset is inspected at native size and the final DOCX is rendered and inspected at 100%; black Title style, absence of a title line, visible page numbering, claim coverage, focus geometry, meaningful image alt text, actual table header rows, and a passing accessibility audit are verified after the last edit.
+25. A report QA, generation, or upload failure creates a `report-only` or `delivery-only` checkpoint against the original run. Resumption neither reruns SIT nor creates test data, and the existing verdict remains unchanged.
+26. The preferred first delivery is one detailed private note with the QA-passed DOCX attached. Success records the Mantis note ID, attachment ID, requested filename, server-stored filename, and report revision.
+27. A post-upload revision creates a new QA-passed attachment with a short private note stating `請以本回話附件為準`; it records the superseded attachment ID and never overwrites or deletes the prior attachment.
+28. Note rendering rejects an invalid classified core and refuses to write outside the run directory; a successful file write is atomic.
+29. `update_latest.py` performs full result validation itself and leaves the prior pointer untouched when validation fails.
 
 ## QA usability
 
-28. A non-engineering QA user can start with a natural-language request, complete setup one question at a time, run verification, and understand the final response without editing YAML or reading source code.
+30. A non-engineering QA user can start with a natural-language request, complete setup one question at a time, run verification, and understand the final response without editing YAML or reading source code.
